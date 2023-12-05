@@ -7,4 +7,4 @@ const productSchema = new mongoose.Schema({
     weight: Number
 });
 
-export const Products = mongoose.model('Product', productSchema);
+export const Products = mongoose.model('Products', productSchema);
