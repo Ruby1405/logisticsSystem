@@ -10,4 +10,4 @@ const warehouseSchema = new mongoose.Schema({
     }]
 });
 
-export const Warehouse = mongoose.model('Product', warehouseSchema);
+export const Warehouse = mongoose.model('Warehouse', warehouseSchema);
