@@ -6,6 +6,7 @@ import { Warehouse } from './warehouse.ts';
 import { Picker } from './picker.ts';
 import { Chauffeur } from './chauffeur.ts';
 import { LogisticsSystemConfig } from './logisticsSystemConfig.ts';
+import { Order } from './order.ts';
 
 const server = new Elysia();
 server.use(html());
@@ -185,7 +186,7 @@ server.get('/currentWorkers', (date) => {
     return currentWorkers;
 });
 
-server.get('stock/products/:id', async ({ params }) => {
+server.get('/stock/products/:id', async ({ params }) => {
     let listOfProducts = [];
     let whCursor = Warehouse.find().cursor();
     for (let doc = await whCursor.next(); doc != null; doc = await whCursor.next()) {
@@ -207,6 +208,153 @@ server.get('stock/products/:id', async ({ params }) => {
 
     return listOfProducts;
 });
+
+server.get('/orders/generate/:amount', async ({ params }) => {
+    console.log("Generating orders...");
+    let logisticsSystemConfig = await LogisticsSystemConfig.findOne()
+    let nextOrderId = logisticsSystemConfig?.nextOrderId || 0;
+    for (let i = 0; i < parseInt(params.amount); i++) {
+        console.log(`Creating order ${nextOrderId}`);
+        
+        let order = new Order({ orderId: nextOrderId});
+        nextOrderId++;
+        let listOfProducts = [];
+        for (let j = 0; j < Math.floor(Math.random()*10); j++) {
+            listOfProducts.push({productId: Math.floor(Math.random()*((logisticsSystemConfig?.nextProductId || 1)-1)), quantity: Math.floor(Math.random()*10)+1});
+        }
+        console.log("list of products:");
+        console.log(listOfProducts);
+
+        let wareHouseSources = await pickFromWharehouses(listOfProducts);
+        console.log("warehousesources:");
+        console.log(wareHouseSources);
+        if (wareHouseSources == null) {
+            console.log("order failed");
+        }
+        else
+        {
+            wareHouseSources[0].demandsMet.forEach(element => {
+                order.products.push({productId: element.productId, quantity: element.quantity});
+            });
+            order.warehouseId = wareHouseSources[0].warehouseId;
+            if (wareHouseSources.length > 1) {
+                for (let j = 1; j < wareHouseSources.length; j++) {
+                    let subOrder = new Order({ orderId: nextOrderId, warehouseId: wareHouseSources[j].warehouseId});
+                    order.suborders.push(nextOrderId);
+                    nextOrderId++;
+                    wareHouseSources[j].demandsMet.forEach(element => {
+                        subOrder.products.push({productId: element.productId, quantity: element.quantity});
+                    });
+                }
+            }
+        }
+        await order.save().then(() => console.log("Order saved"));
+    }
+    if (logisticsSystemConfig != null) {
+        logisticsSystemConfig.nextOrderId = nextOrderId;
+        await logisticsSystemConfig.save().then(() => console.log("LogisticsSystemConfig saved"));
+    }
+    else {
+        console.log("LogisticsSystemConfig is null");
+    }
+    return await Order.find();
+});
+
+async function pickFromWharehouses(listOfProducts: {productId: number, quantity: number}[]) {
+    console.log(`Picking from warehouses:`);
+    console.log(listOfProducts);
+    let totalAmount = 0;
+    listOfProducts.forEach(element => {
+        totalAmount += element.quantity;
+    });
+    console.log("total amount:" + totalAmount);
+    //let listOfScores = [];
+    let bestScore = 0;
+    let bestWarehouse = 0;
+    let returnList = [];
+    let demandsMet = [];
+    let demandsLeft = [];
+    let whCursor = await Warehouse.find().cursor();
+    for (let doc = await whCursor.next(); doc != null; doc = await whCursor.next()) {
+        let demands = structuredClone(listOfProducts);
+        demands.forEach(requestedProduct => {
+            for (let i = 0; i < doc.stock.length; i++) {
+                if (doc.stock[i].productId == requestedProduct.productId) {
+                    requestedProduct.quantity -= doc.stock[i]?.quantity || 0;
+                }
+                if (requestedProduct.quantity <= 0) {
+                    requestedProduct.quantity = 0;
+                    break;
+                }
+            }; 
+        });
+        let sum = 0;
+        demands.forEach(requestedProduct => {
+            sum += requestedProduct.quantity;
+        });
+        if (1 - (sum/totalAmount) > bestScore) {
+            console.log("new best score: " + (1 - (sum/totalAmount)) + ` ${sum} / ${totalAmount}`);
+            bestWarehouse = doc?.warehouseId || 0;
+            demandsMet = [];
+            demandsLeft = [];
+            bestScore = 1 - (sum/totalAmount);
+            for (let i = 0; i < listOfProducts.length; i++) {
+                console.log((demands[i].quantity < listOfProducts[i].quantity) + " " + demands[i].quantity + " < " + listOfProducts[i].quantity);
+                if (demands[i].quantity < listOfProducts[i].quantity) {
+                    demandsMet.push({productId: listOfProducts[i].productId, quantity: listOfProducts[i].quantity - demands[i].quantity});
+                }
+                if (demands[i].quantity > 0) {
+                    demandsLeft.push(demands[i]);
+                }
+            }
+            
+        }
+        if (sum/totalAmount == 0) {
+            break;
+        }
+    }
+    console.log("demands met:");
+    console.log(demandsMet);
+    let warehouse = await Warehouse.findOne({warehouseId: bestWarehouse});
+    let productsToRemove = demandsMet;
+    productsToRemove.forEach(removeElement => {
+        if (warehouse != undefined){
+            for (let i = 0; i < warehouse.stock.length || 0; i++) {
+                if (warehouse.stock[i].productId == removeElement.productId && warehouse.stock[i].quantity != null) {
+                    
+                    if (warehouse.stock[i].quantity < removeElement.quantity)
+                    {
+                        removeElement.quantity -= warehouse.stock[i].quantity;
+                        warehouse.stock[i].quantity = 0;
+                    }
+                    else
+                    {
+                        warehouse.stock[i].quantity -= removeElement.quantity;
+                    }
+                }
+            }
+        }
+
+    });
+
+    if (bestScore == 0) {
+        console.log("No warehouses can fulfill this order");
+        return null;
+    }else
+    {
+        returnList.push({warehouseId: bestWarehouse, demandsMet: demandsMet});
+        if (bestScore < 1) {
+            let wareHouseSources = await pickFromWharehouses(demandsLeft);
+            if (wareHouseSources != null) {
+                wareHouseSources.forEach(element => returnList.push(element));
+            }
+            else {
+                return null;
+            }
+        }
+    }
+    return returnList;
+}
 
 // If all stocked products are in their own collection and know their warehouseId
 // server.get('stock/products/:id', async ({params}) => {

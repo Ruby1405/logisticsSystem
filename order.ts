@@ -12,6 +12,7 @@ const orderSchema = new mongoose.Schema({
     suborders: [Number],
     status: [
         {
+            // 0: queued, 1: picking (with worker), 2: picked, 3: delivering (with worker), 4: delivered
             timeStamp: Date,
             WorkerId: Number
         }
