@@ -216,7 +216,7 @@ server.get('/orders/generate/:amount', async ({ params }) => {
     for (let i = 0; i < parseInt(params.amount); i++) {
         console.log(`Creating order ${nextOrderId}`);
         
-        let order = new Order({ orderId: nextOrderId});
+        let order = await Order.create({ orderId: nextOrderId});
         nextOrderId++;
         let listOfProducts = [];
         for (let j = 0; j < Math.floor(Math.random()*10); j++) {
@@ -245,6 +245,7 @@ server.get('/orders/generate/:amount', async ({ params }) => {
                     wareHouseSources[j].demandsMet.forEach(element => {
                         subOrder.products.push({productId: element.productId, quantity: element.quantity});
                     });
+                    await subOrder.save().then(() => console.log("Suborder saved"));
                 }
             }
         }
