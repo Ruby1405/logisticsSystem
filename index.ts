@@ -29,7 +29,7 @@ const randInt = (min: number, max: number) =>
 const hourNow = () => Date.now() - (Date.now() % msPerHour);
 
 // Generate chauffeurs
-server.get('/workers/chauffeur/generate/:amount', async ({ params }) => {
+async function GenerateChauffeurs(amount: number){
 
     console.log("Generating chauffeurs...");
 
@@ -38,7 +38,7 @@ server.get('/workers/chauffeur/generate/:amount', async ({ params }) => {
     let nextWorkerId = logisticsSystemConfig?.nextWorkerId || 0;
 
     // Generate chauffeurs
-    for (let index = 0; index < parseInt(params.amount); index++) {
+    for (let index = 0; index < amount; index++) {
 
         // Generate random name
         let firstName = "";
@@ -104,10 +104,10 @@ server.get('/workers/chauffeur/generate/:amount', async ({ params }) => {
 
     // Return all chauffeurs
     return await Chauffeur.find();
-});
+};
 
 // Generate pickers
-server.get('/workers/picker/generate/:amount', async ({ params }) => {
+async function GeneratePickers(amount: number){
 
     console.log("Generating pickers...");
 
@@ -116,7 +116,7 @@ server.get('/workers/picker/generate/:amount', async ({ params }) => {
     let nextWorkerId = logisticsSystemConfig?.nextWorkerId || 0;
 
     // Generate pickers
-    for (let index = 0; index < parseInt(params.amount); index++) {
+    for (let index = 0; index < amount; index++) {
 
         // Generate random name
         let firstName = "";
@@ -184,10 +184,10 @@ server.get('/workers/picker/generate/:amount', async ({ params }) => {
 
     // Return all pickers
     return await Picker.find();
-});
+};
 
 // Generate products
-server.get('/products/generate', async () => {
+async function GenerateProducts(){
 
     console.log("Generating products...");
 
@@ -238,10 +238,10 @@ server.get('/products/generate', async () => {
 
     // Return all products
     return await Products.find();
-});
+};
 
 // Generate warehouses
-server.get('/warehouses/generate/:amount', async ({ params }) => {
+async function GenerateWarehouses(amount: number){
 
     console.log("Generating warehouses...");
 
@@ -250,7 +250,7 @@ server.get('/warehouses/generate/:amount', async ({ params }) => {
     let nextWarehouseId = logisticsSystemConfig?.nextWarehouseId || 0;
 
     // Generate warehouses
-    for (let index = 0; index < parseInt(params.amount); index++) {
+    for (let index = 0; index < amount; index++) {
 
         // Generate random name
         let firstName = warehouseNames1[randInt(0, warehouseNames1.length)];
@@ -305,10 +305,10 @@ server.get('/warehouses/generate/:amount', async ({ params }) => {
 
     // Return all warehouses
     return await Warehouse.find();
-});
+};
 
 // Generate orders
-server.get('/orders/generate/:amount', async ({ params }) => {
+async function GenerateOrders(amount: number){
 
     console.log("Generating orders...");
 
@@ -317,7 +317,7 @@ server.get('/orders/generate/:amount', async ({ params }) => {
     let nextOrderId = logisticsSystemConfig?.nextOrderId || 0;
 
     // Generate orders
-    for (let i = 0; i < parseInt(params.amount); i++) {
+    for (let i = 0; i < amount; i++) {
 
         console.log(`Creating order ${nextOrderId}`);
 
@@ -553,7 +553,7 @@ server.get('/orders/generate/:amount', async ({ params }) => {
 
     // Return all orders
     return await Order.find();
-});
+};
 
 // Find warehouses that have these products
 async function pickFromWharehouses(
@@ -643,7 +643,6 @@ async function pickFromWharehouses(
         }
     }
 
-
     // If the score of the best warehouse is 0 then no warehouse can fulfill this order
     if (bestScore == 0) {
         console.log("No warehouses can fulfill this order");
@@ -701,9 +700,6 @@ async function pickFromWharehouses(
     return returnList;
 }
 
-// First endpoint, kept for nostalgic reasons
-server.get('/', () => '<h1>SALUTATIONS!</h1>');
-
 // ...
 server.get('/currentWorkers', (date) => {
     let currentWorkers = [];
@@ -717,38 +713,60 @@ server.get('/currentWorkers', (date) => {
 });
 
 // get all warehouses with this product
-server.get('/stock/products/:id', async ({ params }) => {
-
+async function FindProductById(id: number) {
+    
     let returnList = [];
     let whCursor = Warehouse.find().cursor();
-
+    
     // Iterate through all warehouses
     for (let doc = await whCursor.next(); doc != null; doc = await whCursor.next()) {
-
+        
         // Create a warehouse log
         let whLog = {
             warehouseId: doc.warehouseId,
             amount: 0
         };
-
+        
         // Iterate through all products in the warehouse
         doc.stock.forEach(element => {
             // If the product is the id matches add the quantity to the log
-            if (element.productId == parseInt(params.id)) {
+            if (element.productId == id) {
                 whLog.amount += element?.quantity || 0;
             }
         });
-
+        
         // If the log has a positive amount, add it to the return list
         if (whLog.amount > 0) {
             returnList.push(whLog);
         }
     }
-
+    
     // Return the warehouses with the product
     return returnList;
-});
+};
 
+// First endpoint, kept for nostalgic reasons
+server.get('/', () => '<h1>SALUTATIONS!</h1>');
+
+// ---------------
+// DATA GENERATION
+// ---------------
+// Generate products
+server.get('/products/generate', async () => GenerateProducts());
+// Generate warehouses
+server.get('/warehouses/generate/:amount', async ({ params }) => GenerateWarehouses(parseInt(params.amount)));
+// Generate chauffeurs
+server.get('/workers/chauffeur/generate/:amount', async ({ params }) => GenerateChauffeurs(parseInt(params.amount)));
+// Generate pickers
+server.get('/workers/picker/generate/:amount', async ({ params }) => GeneratePickers(parseInt(params.amount)));
+// Generate orders
+server.get('/orders/generate/:amount', async ({ params }) => GenerateOrders(parseInt(params.amount)));
+
+// --------------
+// DATA RETRIEVAL
+// --------------
+// get all warehouses with this product
+server.get('/stock/products/:id', async ({ params }) => FindProductById(parseInt(params.id)));
 
 // Start server
 server.listen(8080);
@@ -757,5 +775,6 @@ server.listen(8080);
 console.log("Bun Bun listenening to port 8080!");
 
 // Connect to database
-mongoose.connect(`mongodb+srv://${Bun.env.MONGOOSE_USERNAME}:${Bun.env.MONGOOSE_PASSWORD}@logisticssystem.1yypplx.mongodb.net/Kitty?retryWrites=true&w=majority`)
+const database = "Kitty";
+mongoose.connect(`mongodb+srv://${Bun.env.MONGOOSE_USERNAME}:${Bun.env.MONGOOSE_PASSWORD}@logisticssystem.1yypplx.mongodb.net/${database}?retryWrites=true&w=majority`)
     .then(() => console.log("Connected"));
