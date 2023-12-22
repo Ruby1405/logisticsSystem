@@ -109,6 +109,7 @@ async function FindFreePickers() {
             }
         });
     });
+    
     // go through each order and find the picker who is working on it and remove them from the list
     let orderCursor = Order.find().cursor();
     for (let doc = await orderCursor.next(); doc != null; doc = await orderCursor.next()) {
@@ -131,17 +132,23 @@ async function searchStock(query: any) {
 }
 
 async function searchOrders(query: any) {
-    console.log(query);
+    
+    // Create filter object to add filters to
     let filter: object = {};
+    // Create sort object to assign a sort to
     let sort = {};
+
+
     if (query.id)
     {
         filter = { ...filter, orderId: parseInt(query.id) };
     }
+
     if (query.status)
     {
         filter = { ...filter, status: parseInt(query.status) };
     }
+
     if (query.priceSort)
     {
         switch (query.priceSort)
@@ -154,14 +161,20 @@ async function searchOrders(query: any) {
                 break;
         }
     }
+
     if (query.limit)
     {
+        // If there's a timeSort the limit will be applied after the orders are found
         if (!query.timeSort)
         {
             query.limit = parseInt(query.limit);
         }
     }
+
     let orders = await Order.find(filter).sort(sort).limit(query.limit);
+
+    // Post processing of the return list
+
     if (query.month)
     {
         let month = parseInt(query.month);
@@ -169,6 +182,7 @@ async function searchOrders(query: any) {
             .statusLog[parseInt(query.status)]
             .timeStamp?.getMonth() == month);
     }
+
     if (query.day)
     {
         let day = parseInt(query.day);
@@ -176,6 +190,7 @@ async function searchOrders(query: any) {
             .statusLog[parseInt(query.status)]
             .timeStamp?.getDate() == day);
     }
+
     if (query.timeSort)
     {
         switch (query.timeSort)
@@ -193,11 +208,15 @@ async function searchOrders(query: any) {
             default:
                 break;
         }
+
+        // Here the limit is applied
         if (query.limit)
         {
             orders = orders.slice(0, parseInt(query.limit));
         }
     }
+
+    // If the priceSum query is true, return only the sum of the prices
     if (query.priceSum)
     {
         let sum = 0;
