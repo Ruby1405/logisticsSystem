@@ -1,10 +1,10 @@
 import Elysia from "elysia";
-import { Products } from './product.ts';
-import { Warehouse } from './warehouse.ts';
-import { Picker } from './picker.ts';
-import { Chauffeur } from './chauffeur.ts';
-import { LogisticsSystemConfig } from './logisticsSystemConfig.ts';
-import { Order } from './order.ts';
+import { Products } from './schemas/product.ts';
+import { Warehouse } from './schemas/warehouse.ts';
+import { Picker } from './schemas/picker.ts';
+import { Chauffeur } from './schemas/chauffeur.ts';
+import { LogisticsSystemConfig } from './schemas/logisticsSystemConfig.ts';
+import { Order } from './schemas/order.ts';
 import { NameLists } from "./namelists.ts";
 
 export const Generate = new Elysia({ prefix: '/generate' });
@@ -40,7 +40,7 @@ const randInt = (min: number, max: number) =>
 const hourNow = () => Date.now() - (Date.now() % msPerHour);
 
 // Generate chauffeurs
-async function GenerateChauffeurs(amount: number){
+async function GenerateChauffeurs(amount: number) {
 
     console.log("Generating chauffeurs...");
 
@@ -118,7 +118,7 @@ async function GenerateChauffeurs(amount: number){
 };
 
 // Generate pickers
-async function GeneratePickers(amount: number){
+async function GeneratePickers(amount: number) {
 
     console.log("Generating pickers...");
 
@@ -198,7 +198,7 @@ async function GeneratePickers(amount: number){
 };
 
 // Generate products
-async function GenerateProducts(){
+async function GenerateProducts() {
 
     console.log("Generating products...");
 
@@ -252,7 +252,7 @@ async function GenerateProducts(){
 };
 
 // Generate warehouses
-async function GenerateWarehouses(amount: number){
+async function GenerateWarehouses(amount: number) {
 
     console.log("Generating warehouses...");
 
@@ -319,7 +319,7 @@ async function GenerateWarehouses(amount: number){
 };
 
 // Generate orders
-async function GenerateOrders(amount: number){
+async function GenerateOrders(amount: number) {
 
     console.log("Generating orders...");
 
@@ -333,7 +333,7 @@ async function GenerateOrders(amount: number){
         console.log(`Creating order ${nextOrderId}`);
 
         // Create order
-        let order: any = await Order.create({ orderId: nextOrderId, price: 0});
+        let order: any = await Order.create({ orderId: nextOrderId, price: 0 });
 
         // Increment orderId
         nextOrderId++;
@@ -373,7 +373,7 @@ async function GenerateOrders(amount: number){
 
                 // Iterate through the warehouses
                 for (let j = 1; j < wareHouseSources.length; j++) {
-                    
+
                     // Create suborder
                     let subOrder: any = new Order({
                         orderId: nextOrderId,
