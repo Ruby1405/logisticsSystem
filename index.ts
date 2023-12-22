@@ -55,6 +55,8 @@ server.get('/', () => '<h1>SALUTATIONS!</h1>');
 // get all warehouses with this product
 server.get('/orders/price/highest/:limit', async ({ params }) => Order.find().sort({ price: -1 }).limit(parseInt(params.limit)));
 server.get('/orders/status/:status', async ({ params }) => Order.find({ status: parseInt(params.status)}));
+server.get('/chauffers/working', async ({ query }) => FindWorkingChauffers(query));
+server.get('/pickers/free', async () => FindFreePickers());
 server.get('/search/:type', ({ params, query }) => {
     switch (params.type) {
         case "orders":
@@ -65,6 +67,61 @@ server.get('/search/:type', ({ params, query }) => {
             return "Invalid search parameter";
     }
 });
+
+async function FindWorkingChauffers(query: any) {
+    // find chauffers who are working on a certain day and month and return their ids
+    let chaufferList = await Chauffeur.find();
+    let chaufferIds: number[] = [];
+    let day = query.day? parseInt(query.day): new Date(Date.now()).getDate();
+    let month = query.month? parseInt(query.month): new Date(Date.now()).getMonth();
+
+    chaufferList.forEach(element => {
+        element.schedule.forEach(shift => {
+            if (shift.end && shift.start && element.workerId)
+            {
+                if ((shift.end.getDate() == day &&
+                    shift.end.getMonth() == month) ||
+                    (shift.start.getDate() == day &&
+                    shift.start.getMonth() == month))
+                {
+                    chaufferIds.push(element.workerId);
+                }
+            }
+        });
+    });
+
+    return chaufferIds;
+}
+
+async function FindFreePickers() {
+    // find pickers who are currently working
+    let pickerList = await Picker.find();
+    let pickerIds: number[] = [];
+    pickerList.forEach(element => {
+        element.schedule.forEach(shift => {
+            if (shift.end && shift.start && element.workerId)
+            {
+                if (shift.end > new Date(Date.now()) &&
+                    shift.start < new Date(Date.now()))
+                {
+                    pickerIds.push(element.workerId);
+                }
+            }
+        });
+    });
+    // go through each order and find the picker who is working on it and remove them from the list
+    let orderCursor = Order.find().cursor();
+    for (let doc = await orderCursor.next(); doc != null; doc = await orderCursor.next()) {
+        if (doc.status == 1)
+        {
+            if (doc.statusLog[0].WorkerId)
+            {
+                pickerIds.splice(pickerIds.indexOf(doc.statusLog[0].WorkerId), 1);
+            }
+        }
+    }
+    return pickerIds;
+}
 
 async function searchStock(query: any) {
     if (query.id)
