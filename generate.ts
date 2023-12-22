@@ -17,11 +17,19 @@ Generate.get('/products', async () => GenerateProducts());
 // Generate warehouses
 Generate.get('/warehouses/:amount', async ({ params }) => GenerateWarehouses(parseInt(params.amount)));
 // Generate chauffeurs
-Generate.get('/workers/chauffeur/:amount', async ({ params }) => GenerateChauffeurs(parseInt(params.amount)));
+Generate.get('/workers/chauffeurs/:amount', async ({ params }) => GenerateChauffeurs(parseInt(params.amount)));
 // Generate pickers
-Generate.get('/workers/picker/:amount', async ({ params }) => GeneratePickers(parseInt(params.amount)));
+Generate.get('/workers/pickers/:amount', async ({ params }) => GeneratePickers(parseInt(params.amount)));
 // Generate orders
 Generate.get('/orders/:amount', async ({ params }) => GenerateOrders(parseInt(params.amount)));
+// Generate all
+Generate.get('/all/:amount', async ({ params }) => {
+    await GenerateProducts();
+    await GenerateWarehouses(parseInt(params.amount));
+    await GenerateChauffeurs(parseInt(params.amount));
+    await GeneratePickers(parseInt(params.amount) * 2);
+    await GenerateOrders(parseInt(params.amount) * 0.5);
+});
 
 // Number of milliseconds in an hour
 const msPerHour = 3600 * 1000;
@@ -325,7 +333,7 @@ async function GenerateOrders(amount: number){
         console.log(`Creating order ${nextOrderId}`);
 
         // Create order
-        let order = await Order.create({ orderId: nextOrderId });
+        let order: any = await Order.create({ orderId: nextOrderId, price: 0});
 
         // Increment orderId
         nextOrderId++;
@@ -337,6 +345,8 @@ async function GenerateOrders(amount: number){
                 productId: randInt(0, ((logisticsSystemConfig?.nextProductId || 1) - 1)),
                 quantity: randInt(1, 10)
             });
+            let productById = (await Products.findOne({ productId: listOfProducts[j].productId }));
+            order.price += listOfProducts[j].quantity * (productById?.price || 0);
         }
 
         // Find where these products can be found
@@ -363,11 +373,13 @@ async function GenerateOrders(amount: number){
 
                 // Iterate through the warehouses
                 for (let j = 1; j < wareHouseSources.length; j++) {
-
+                    
                     // Create suborder
-                    let subOrder = new Order({
+                    let subOrder: any = new Order({
                         orderId: nextOrderId,
-                        warehouseId: wareHouseSources[j].warehouseId
+                        warehouseId: wareHouseSources[j].warehouseId,
+                        mommyOrder: order.orderId,
+                        price: 0
                     });
 
                     // Mark the suborder on the main order
@@ -377,7 +389,9 @@ async function GenerateOrders(amount: number){
                     nextOrderId++;
 
                     // Add the products of the warehouse to the suborder
-                    wareHouseSources[j].demandsMet.forEach(element => {
+                    wareHouseSources[j].demandsMet.forEach(async (element) => {
+                        let productById = await Products.findOne({ productId: element.productId });
+                        subOrder.price += element?.quantity * (productById?.price || 0);
                         subOrder.products.push({
                             productId: element.productId,
                             quantity: element.quantity
@@ -388,7 +402,7 @@ async function GenerateOrders(amount: number){
                     for (let k = 0; k < randInt(0, 5); k++) {
 
                         // Add timestamp
-                        subOrder.status.push({
+                        subOrder.statusLog.push({
                             timeStamp: new Date(
                                 Date.now()
                                 - msPerHour * 4
@@ -404,8 +418,8 @@ async function GenerateOrders(amount: number){
                             let possiblePickers = await Picker.find({
                                 schedule: {
                                     $elemMatch: {
-                                        start: { $lte: subOrder.status[k].timeStamp },
-                                        end: { $gte: subOrder.status[k].timeStamp },
+                                        start: { $lte: subOrder.statusLog[k].timeStamp },
+                                        end: { $gte: subOrder.statusLog[k].timeStamp },
                                         wareHouse: subOrder.warehouseId
                                     }
                                 }
@@ -413,12 +427,12 @@ async function GenerateOrders(amount: number){
 
                             // If there are pickers available assign one to the suborder
                             if (possiblePickers.length > 0) {
-                                subOrder.status[k].WorkerId = possiblePickers[randInt(0, (possiblePickers.length - 1))].workerId;
+                                subOrder.statusLog[k].WorkerId = possiblePickers[randInt(0, (possiblePickers.length - 1))].workerId;
                             }
                             else {
                                 // else log it and remove the timestamp
                                 console.log("No pickers available");
-                                subOrder.status.pop()
+                                subOrder.statusLog.pop()
                                 break;
                             }
                         }
@@ -430,24 +444,25 @@ async function GenerateOrders(amount: number){
                             let possibleChauffeurs = await Chauffeur.find({
                                 schedule: {
                                     $elemMatch: {
-                                        start: { $lte: subOrder.status[k].timeStamp },
-                                        end: { $gte: subOrder.status[k].timeStamp }
+                                        start: { $lte: subOrder.statusLog[k].timeStamp },
+                                        end: { $gte: subOrder.statusLog[k].timeStamp }
                                     }
                                 }
                             });
 
                             // If there are chauffeurs available assign one to the suborder
                             if (possibleChauffeurs.length > 0) {
-                                subOrder.status[k].WorkerId = possibleChauffeurs[randInt(0, (possibleChauffeurs.length - 1))].workerId;
+                                subOrder.statusLog[k].WorkerId = possibleChauffeurs[randInt(0, (possibleChauffeurs.length - 1))].workerId;
                             }
                             else {
                                 // else log it and remove the timestamp
                                 console.log("No chauffeurs available");
-                                subOrder.status.pop()
+                                subOrder.statusLog.pop()
                                 break;
                             }
                         }
                     }
+                    subOrder.status = subOrder.statusLog.length - 1;
 
                     // Save suborder
                     await subOrder.save()
@@ -455,7 +470,7 @@ async function GenerateOrders(amount: number){
                 }
 
                 // If there are suborders only add a queued timestamp to the main order
-                order.status.push({ timeStamp: new Date(Date.now()) });
+                order.statusLog.push({ timeStamp: new Date(Date.now()) });
             }
             else {
                 // else (if there are no suborders)
@@ -464,7 +479,7 @@ async function GenerateOrders(amount: number){
                 for (let k = 0; k < Math.floor(Math.random() * 5); k++) {
 
                     // Add timestamp
-                    order.status.push({
+                    order.statusLog.push({
                         timeStamp: new Date(
                             Date.now()
                             - msPerHour * 4
@@ -480,8 +495,8 @@ async function GenerateOrders(amount: number){
                         let possiblePickers = await Picker.find({
                             schedule: {
                                 $elemMatch: {
-                                    start: { $lte: order.status[k].timeStamp },
-                                    end: { $gte: order.status[k].timeStamp },
+                                    start: { $lte: order.statusLog[k].timeStamp },
+                                    end: { $gte: order.statusLog[k].timeStamp },
                                     wareHouse: order.warehouseId
                                 }
                             }
@@ -489,12 +504,12 @@ async function GenerateOrders(amount: number){
 
                         // If there are pickers available assign one to the order
                         if (possiblePickers.length > 0) {
-                            order.status[k].WorkerId = possiblePickers[Math.floor(Math.random() * (possiblePickers.length - 1))].workerId;
+                            order.statusLog[k].WorkerId = possiblePickers[Math.floor(Math.random() * (possiblePickers.length - 1))].workerId;
                         }
                         else {
                             // else log it and remove the timestamp
                             console.log("No pickers available");
-                            order.status.pop()
+                            order.statusLog.pop()
                             break;
                         }
                     }
@@ -506,24 +521,25 @@ async function GenerateOrders(amount: number){
                         let possibleChauffeurs = await Chauffeur.find({
                             schedule: {
                                 $elemMatch: {
-                                    start: { $lte: order.status[k].timeStamp },
-                                    end: { $gte: order.status[k].timeStamp }
+                                    start: { $lte: order.statusLog[k].timeStamp },
+                                    end: { $gte: order.statusLog[k].timeStamp }
                                 }
                             }
                         });
 
                         // If there are chauffeurs available assign one to the order
                         if (possibleChauffeurs.length > 0) {
-                            order.status[k].WorkerId = possibleChauffeurs[Math.floor(Math.random() * (possibleChauffeurs.length - 1))].workerId;
+                            order.statusLog[k].WorkerId = possibleChauffeurs[Math.floor(Math.random() * (possibleChauffeurs.length - 1))].workerId;
                         }
                         else {
                             // else log it and remove the timestamp
                             console.log("No chauffeurs available");
-                            order.status.pop()
+                            order.statusLog.pop()
                             break;
                         }
                     }
                 }
+                order.status = order.statusLog.length - 1;
             }
         }
 
@@ -653,7 +669,7 @@ async function pickFromWharehouses(
     } else {
 
         // After finding the best warehouse, remove the products from the stock
-        let warehouse = await Warehouse.findOne({ warehouseId: bestWarehouse });
+        let warehouse: any = await Warehouse.findOne({ warehouseId: bestWarehouse });
         let productsToRemove = demandsMet;
 
         productsToRemove.forEach(removeElement => {
