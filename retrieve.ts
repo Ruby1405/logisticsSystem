@@ -10,12 +10,6 @@ export const Retrieve = new Elysia({ prefix: '/retrieve' });
 // --------------
 // DATA RETRIEVAL
 // --------------
-// get all warehouses with this product
-Retrieve.get('/orders/price/highest/:limit', async ({ params }) =>
-    Order.find().sort({ price: -1 }).limit(parseInt(params.limit)));
-// get all orders with this status
-Retrieve.get('/orders/status/:status', async ({ params }) =>
-    Order.find({ status: parseInt(params.status) }));
 // get all chauffers who are working on a certain day and month
 Retrieve.get('/chauffers/working', async ({ query }) =>
     FindWorkingChauffers(query));
