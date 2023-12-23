@@ -10,9 +10,9 @@ export const Retrieve = new Elysia({ prefix: '/retrieve' });
 // --------------
 // DATA RETRIEVAL
 // --------------
-// get all chauffers who are working on a certain day and month
-Retrieve.get('/chauffers/working', async ({ query }) =>
-    FindWorkingChauffers(query));
+// get all chauffeurs who are working on a certain day and month
+Retrieve.get('/chauffeurs/working', async ({ query }) =>
+    FindWorkingchauffeurs(query));
 // get all pickers who are currently working but don't have an assigned order
 Retrieve.get('/pickers/free', async () =>
     FindFreePickers());
@@ -61,8 +61,8 @@ async function FindProductById(id: number) {
     return returnList;
 };
 
-async function FindWorkingChauffers(query: any) {
-    // find chauffers who are working on a certain day and month and return their ids
+async function FindWorkingchauffeurs(query: any) {
+    // find chauffeurs who are working on a certain day and month and return their ids
     let chaufferList = await Chauffeur.find();
     let chaufferIds: number[] = [];
     let day = query.day ? parseInt(query.day) : new Date(Date.now()).getDate();
