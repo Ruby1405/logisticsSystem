@@ -15,20 +15,40 @@ export const Generate = new Elysia({ prefix: '/generate' });
 // Generate products
 Generate.get('/products', async () => GenerateProducts());
 // Generate warehouses
-Generate.get('/warehouses/:amount', async ({ params }) => GenerateWarehouses(parseInt(params.amount)));
+Generate.get('/warehouses/:amount', async ({ params }) => 
+{
+    let amount = parseInt(params.amount);
+    if (amount < 1 || isNaN(amount)) return "Invalid amount";
+    GenerateWarehouses(amount);
+});
 // Generate chauffeurs
-Generate.get('/workers/chauffeurs/:amount', async ({ params }) => GenerateChauffeurs(parseInt(params.amount)));
+Generate.get('/workers/chauffeurs/:amount', async ({ params }) => {
+    let amount = parseInt(params.amount);
+    if (amount < 1 || isNaN(amount)) return "Invalid amount";
+    GenerateChauffeurs(amount);
+});
 // Generate pickers
-Generate.get('/workers/pickers/:amount', async ({ params }) => GeneratePickers(parseInt(params.amount)));
+Generate.get('/workers/pickers/:amount', async ({ params }) => {
+    let amount = parseInt(params.amount);
+    if (amount < 1 || isNaN(amount)) return "Invalid amount";
+    GeneratePickers(amount);
+});
 // Generate orders
-Generate.get('/orders/:amount', async ({ params }) => GenerateOrders(parseInt(params.amount)));
+Generate.get('/orders/:amount', async ({ params }) => {
+    let amount = parseInt(params.amount);
+    if (parseInt(params.amount) < 1) return "Invalid amount";
+    GenerateOrders(amount)
+});
 // Generate all
 Generate.get('/all/:amount', async ({ params }) => {
+    let amount = parseInt(params.amount);
+    if (amount < 1 || isNaN(amount)) return "Invalid amount";
     await GenerateProducts();
-    await GenerateWarehouses(parseInt(params.amount));
-    await GenerateChauffeurs(parseInt(params.amount));
-    await GeneratePickers(parseInt(params.amount) * 2);
-    await GenerateOrders(parseInt(params.amount) * 0.5);
+    await GenerateWarehouses(amount);
+    await GenerateChauffeurs(amount);
+    await GeneratePickers(amount * 2);
+    await GenerateOrders(amount * 0.5);
+    return "Done";
 });
 
 // Number of milliseconds in an hour

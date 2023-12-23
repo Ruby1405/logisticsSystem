@@ -57,6 +57,9 @@ async function FindProductById(id: number) {
         }
     }
 
+    if (returnList.length == 0) {
+        return "No warehouses with this product";
+    }
     // Return the warehouses with the product
     return returnList;
 };
@@ -67,6 +70,13 @@ async function FindWorkingchauffeurs(query: any) {
     let chaufferIds: number[] = [];
     let day = query.day ? parseInt(query.day) : new Date(Date.now()).getDate();
     let month = query.month ? parseInt(query.month) : new Date(Date.now()).getMonth();
+
+    if (day > 31 || day < 0 || isNaN(day)) {
+        return "Invalid day parameter";
+    }
+    if (month > 11 || month < 0 || isNaN(month)) {
+        return "Invalid month parameter";
+    }
 
     chaufferList.forEach(element => {
         element.schedule.forEach(shift => {
@@ -81,6 +91,9 @@ async function FindWorkingchauffeurs(query: any) {
         });
     });
 
+    if (chaufferIds.length == 0) {
+        return "No chauffeurs working on this day and month";
+    }
     return chaufferIds;
 }
 
@@ -99,6 +112,10 @@ async function FindFreePickers() {
         });
     });
 
+    if (pickerIds.length == 0) {
+        return "No pickers working right now";
+    }
+
     // go through each order and find the picker who is working on it and remove them from the list
     let orderCursor = Order.find().cursor();
     for (let doc = await orderCursor.next(); doc != null; doc = await orderCursor.next()) {
@@ -108,12 +125,20 @@ async function FindFreePickers() {
             }
         }
     }
+    
+    if (pickerIds.length == 0) {
+        return "No free pickers";
+    }
     return pickerIds;
 }
 
 async function searchStock(query: any) {
     if (query.id) {
-        return await FindProductById(parseInt(query.id));
+        let id = parseInt(query.id);
+        if (id < 0 || isNaN(id)) {
+            return "Invalid id parameter";
+        }
+        return await FindProductById(id);
     }
 }
 
@@ -126,11 +151,19 @@ async function searchOrders(query: any) {
 
 
     if (query.id) {
-        filter = { ...filter, orderId: parseInt(query.id) };
+        let id = parseInt(query.id);
+        if (id < 0 || isNaN(id)) {
+            return "Invalid id parameter";
+        }
+        filter = { ...filter, orderId: id };
     }
 
     if (query.status) {
-        filter = { ...filter, status: parseInt(query.status) };
+        let status = parseInt(query.status);
+        if (status > 4 || status < 0 || isNaN(status)) {
+            return "Invalid status parameter";
+        }
+        filter = { ...filter, status: status };
     }
 
     if (query.priceSort) {
@@ -141,10 +174,14 @@ async function searchOrders(query: any) {
             case "highest":
                 sort = { price: -1 };
                 break;
+            default:
+                return "Invalid priceSort parameter";
+                break;
         }
     }
 
     if (query.limit) {
+        if (query.limit <= 0 || isNaN(query.limit)) return "Invalid limit parameter";
         // If there's a timeSort the limit will be applied after the orders are found
         if (!query.timeSort) {
             query.limit = parseInt(query.limit);
@@ -157,6 +194,9 @@ async function searchOrders(query: any) {
 
     if (query.month) {
         let month = parseInt(query.month);
+        if (month > 11 || month < 0 || isNaN(month)) {
+            return "Invalid month parameter";
+        }
         orders = orders.filter(order => order
             .statusLog[parseInt(query.status)]
             .timeStamp?.getMonth() == month);
@@ -164,6 +204,9 @@ async function searchOrders(query: any) {
 
     if (query.day) {
         let day = parseInt(query.day);
+        if (day > 31 || day < 0 || isNaN(day)) {
+            return "Invalid day parameter";
+        }
         orders = orders.filter(order => order
             .statusLog[parseInt(query.status)]
             .timeStamp?.getDate() == day);
@@ -182,6 +225,7 @@ async function searchOrders(query: any) {
                         .timeStamp.getTime());
                 break;
             default:
+                return "Invalid timeSort parameter";
                 break;
         }
 
@@ -195,9 +239,15 @@ async function searchOrders(query: any) {
     if (query.priceSum) {
         let sum = 0;
         orders.forEach(order => sum += order.price ? order.price : 0);
+        if (sum == 0) {
+            return "The query yielded no orders";
+        }
         return sum;
     }
     else {
+        if (orders.length == 0) {
+            return "The query yielded no orders";
+        }
         return orders;
     }
 }
